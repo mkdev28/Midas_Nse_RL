@@ -157,13 +157,26 @@ print(f"NaN in feature array  : {nan_count} ({nan_pct}%)")
 print("  NaN level acceptable (warmup + IPO gaps expected)"
       if nan_pct <= 5 else "  WARNING: High NaN — check missing tickers")
 
-# ── Normalize on train only (Fix 5) ───────────────────────────────────
-trading_days_dt = pd.to_datetime(trading_days)
-train_mask = trading_days_dt <  "2021-01-01"
-val_mask   = (trading_days_dt >= "2021-01-01") & (trading_days_dt < "2023-01-01")
-test_mask  = trading_days_dt >= "2023-01-01"
+# ── Normalize on train only (date-aligned split) ──────────────────────
+# Load exact date indices from split parquet files
+train_dates = pd.read_parquet(os.path.join(PROC, "train.parquet")).index
+val_dates   = pd.read_parquet(os.path.join(PROC, "val.parquet")).index
+test_dates  = pd.read_parquet(os.path.join(PROC, "test.parquet")).index
 
-train_data = feat_array[train_mask]
+# Build a date → calendar-position lookup from the calendar's date column
+calendar_dates = pd.to_datetime(calendar["date"]).dt.normalize().to_numpy()
+date_to_pos = {d: i for i, d in enumerate(calendar_dates)}
+
+def dates_to_pos(dates):
+    """Convert a DatetimeIndex to an array of integer positions in the calendar."""
+    d = pd.to_datetime(dates).normalize().to_numpy()
+    return np.array([date_to_pos[x] for x in d], dtype=int)
+
+train_pos = dates_to_pos(train_dates)
+val_pos   = dates_to_pos(val_dates)
+test_pos  = dates_to_pos(test_dates)
+
+train_data = feat_array[train_pos]
 means = np.nanmean(train_data, axis=(0, 1), keepdims=True)   # (1, 1, 12)
 stds  = np.nanstd(train_data,  axis=(0, 1), keepdims=True)
 stds[stds == 0] = 1
@@ -171,17 +184,17 @@ stds[stds == 0] = 1
 feat_array = ((feat_array - means) / stds).astype(np.float32)
 feat_array = np.nan_to_num(feat_array, nan=0.0)              # fill residual NaN with 0
 
-print(f"\nNormalized — train mean : {feat_array[train_mask].mean():.4f}")
-print(f"Normalized — train std  : {feat_array[train_mask].std():.4f}")
+print(f"\nNormalized — train mean : {feat_array[train_pos].mean():.4f}")
+print(f"Normalized — train std  : {feat_array[train_pos].std():.4f}")
 
 # ── Save ──────────────────────────────────────────────────────────────
 np.save(os.path.join(PROC, "stock_features.npy"),       feat_array)
 np.save(os.path.join(PROC, "stock_features_means.npy"), means.astype(np.float32))
 np.save(os.path.join(PROC, "stock_features_stds.npy"),  stds.astype(np.float32))
 
-np.save(os.path.join(PROC, "X_train_technical.npy"), feat_array[train_mask])
-np.save(os.path.join(PROC, "X_val_technical.npy"),   feat_array[val_mask])
-np.save(os.path.join(PROC, "X_test_technical.npy"),  feat_array[test_mask])
+np.save(os.path.join(PROC, "X_train_technical.npy"), feat_array[train_pos])
+np.save(os.path.join(PROC, "X_val_technical.npy"),   feat_array[val_pos])
+np.save(os.path.join(PROC, "X_test_technical.npy"),  feat_array[test_pos])
 
 meta = {
     "tickers"      : ticker_index,
@@ -189,11 +202,21 @@ meta = {
     "n_dates"      : n_dates,
     "n_tickers"    : n_tickers,
     "n_features"   : N_FEATURES,
-    "trading_days" : [str(d)[:10] for d in trading_days]
+    "trading_days" : [str(d)[:10] for d in trading_days],
+    # Explicit split metadata
+    "train_pos"    : train_pos.tolist(),
+    "val_pos"      : val_pos.tolist(),
+    "test_pos"     : test_pos.tolist(),
+    "train_start"  : str(pd.to_datetime(train_dates[0]).date()),
+    "train_end"    : str(pd.to_datetime(train_dates[-1]).date()),
+    "val_start"    : str(pd.to_datetime(val_dates[0]).date()),
+    "val_end"      : str(pd.to_datetime(val_dates[-1]).date()),
+    "test_start"   : str(pd.to_datetime(test_dates[0]).date()),
+    "test_end"     : str(pd.to_datetime(test_dates[-1]).date()),
 }
 joblib.dump(meta, os.path.join(PROC, "stock_features_meta.pkl"))
 
-print(f"\nX_train_technical : {feat_array[train_mask].shape}")
-print(f"X_val_technical   : {feat_array[val_mask].shape}")
-print(f"X_test_technical  : {feat_array[test_mask].shape}")
-print("\nP5 ✅ — stock_features.npy + splits + scaler saved")
+print(f"\nX_train_technical : {feat_array[train_pos].shape}")
+print(f"X_val_technical   : {feat_array[val_pos].shape}")
+print(f"X_test_technical  : {feat_array[test_pos].shape}")
+print("\nP5 ✅ — stock_features.npy + aligned splits + scaler saved")

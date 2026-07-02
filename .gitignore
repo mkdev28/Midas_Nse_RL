@@ -13,40 +13,60 @@ build/
 .venv/
 venv/
 ENV/
+env/
 
 # ── Jupyter ───────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
 
-# ── IDE ───────────────────────────────────────────────────────────────
+# ── IDE & Editor ──────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.suo
 *.user
+.gemini/
+.agents/
 
-# ── DATA — never commit raw or external ───────────────────────────────
-data/raw/
-data/external/
-data/master/
+# ── DATA — never commit raw, processed, or external datasets ──────────
+data/
+*.npy
+*.npz
+*.pkl
+*.parquet
+*.csv
+*.xlsx
 
-# ── Processed — keep parquets and csv, exclude large npy/pkl ──────────
-data/processed/*.npy
-data/processed/scaler.pkl
-data/processed/stock_features_meta.pkl
-
-# ── Model artefacts — keep transformer, exclude finbert (2GB+) ────────
-checkpoints/finbert_india/
-checkpoints/checkpoint-*/
+# ── Model Checkpoints & Heavy Weights ─────────────────────────────────
+checkpoints/
+*.safetensors
 *.pth
+*.pt
 *.onnx
+*.zip
 
-# ── Logs ──────────────────────────────────────────────────────────────
+# ── Results & Quantitative Backtest Logs (Protect IEEE Submission) ────
+results/
 logs/
 *.log
 runs/
+scratch/
 
-# ── Obsidian ──────────────────────────────────────────────────────────
-Obsidian/.obsidian/
+# ── Debugging, Smoke Tests, and Check Scripts ─────────────────────────
+check*.py
+diag*.py
+debug*.py
+compare_ckpts.py
+*smoke_test.py
+files*.py
+plot_missing_figures.py
+restructure.py
+
+# ── Internal Notes, Plans, Scans, and Tree Dumps ──────────────────────
+Obsidian/
+*.md
+!README.md
+*.txt
+!requirements.txt
 
 # ── OS ────────────────────────────────────────────────────────────────
 .DS_Store
